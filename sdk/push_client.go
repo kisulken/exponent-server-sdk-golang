@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net/http"
 )
 
@@ -92,6 +94,7 @@ func (c *PushClient) publishInternal(messages []PushMessage) ([]PushResponse, er
 	if err != nil {
 		return nil, err
 	}
+	log.Println("EXPO PUSH SEND: ", string(jsonBytes))
 	resp, err := c.httpClient.Post(url, "application/json", bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return nil, err
@@ -111,15 +114,15 @@ func (c *PushClient) publishInternal(messages []PushMessage) ([]PushResponse, er
 	}
 	// If there are errors with the entire request, raise an error now.
 	if r.Errors != nil {
-		return nil, NewPushServerError("Invalid server response", resp, r, r.Errors)
+		return nil, NewPushServerError("invalid server response", resp, r, r.Errors)
 	}
 	// We expect the response to have a 'data' field with the responses.
 	if r.Data == nil {
-		return nil, NewPushServerError("Invalid server response", resp, r, nil)
+		return nil, NewPushServerError("invalid server response", resp, r, nil)
 	}
 	// Sanity check the response
 	if len(messages) != len(r.Data) {
-		message := "Mismatched response length. Expected %d receipts but only received %d"
+		message := "mismatched response length. Expected %d receipts but only received %d"
 		errorMessage := fmt.Sprintf(message, len(messages), len(r.Data))
 		return nil, NewPushServerError(errorMessage, resp, r, nil)
 	}
@@ -134,5 +137,9 @@ func checkStatus(resp *http.Response) error {
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 		return nil
 	}
-	return fmt.Errorf("Invalid response (%d %s)", resp.StatusCode, resp.Status)
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil || len(data) < 1 {
+		return fmt.Errorf("invalid response (%d %s)", resp.StatusCode, resp.Status)
+	}
+	return fmt.Errorf("invalid response (%d %s) %s", resp.StatusCode, resp.Status, string(data))
 }
